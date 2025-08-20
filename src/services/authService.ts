@@ -173,15 +173,16 @@ class AuthService {
 
       return processedAuthData;
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      
       // If it's not already handled above, record failed attempt
-      if (!error.message.includes('attempt')) {
+      if (!errorMessage.includes('attempt')) {
         const status = lockoutManager.recordLoginAttempt(credentials.email, false);
-        const originalMsg = getErrorMessage(error);
-        const finalMsg = status.message ? `${originalMsg}. ${status.message}` : originalMsg;
+        const finalMsg = status.message ? `${errorMessage}. ${status.message}` : errorMessage;
         throw new Error(finalMsg);
       }
       
-      throw new Error(getErrorMessage(error));
+      throw new Error(errorMessage);
     }
   }
 
