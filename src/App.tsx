@@ -10,6 +10,7 @@ import { FoodLogProvider } from './contexts/FoodLogContext';
 import { VoiceProvider } from './contexts/VoiceContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 
+import './styles/tailwind.css';
 import GlobalStyles from './styles/GlobalStyles';
 import theme from './styles/theme';
 import { ROUTES } from './constants';

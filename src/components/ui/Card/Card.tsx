@@ -1,5 +1,4 @@
 import React from 'react';
-import styled, { css } from 'styled-components';
 import { BaseComponentProps } from '../../../types';
 
 export interface CardProps extends BaseComponentProps {
@@ -11,108 +10,60 @@ export interface CardProps extends BaseComponentProps {
   onClick?: () => void;
 }
 
-const StyledCard = styled.div<CardProps>`
-  background-color: ${({ theme }) => theme.colors.surface};
-  border-radius: 0.75rem;
-  transition: all 0.2s ease-in-out;
-  
-  /* Padding variants */
-  ${({ padding = 'md' }) => {
-    switch (padding) {
-      case 'none':
-        return css`
-          padding: 0;
-        `;
-      case 'sm':
-        return css`
-          padding: ${({ theme }) => theme.spacing.sm};
-        `;
-      case 'lg':
-        return css`
-          padding: ${({ theme }) => theme.spacing.lg};
-        `;
-      default:
-        return css`
-          padding: ${({ theme }) => theme.spacing.md};
-        `;
-    }
-  }}
-
-  /* Shadow variants */
-  ${({ shadow = 'sm' }) => {
-    switch (shadow) {
-      case 'none':
-        return css`
-          box-shadow: none;
-        `;
-      case 'md':
-        return css`
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-                      0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        `;
-      case 'lg':
-        return css`
-          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
-                      0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        `;
-      default:
-        return css`
-          box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1),
-                      0 1px 2px 0 rgba(0, 0, 0, 0.06);
-        `;
-    }
-  }}
-
-  /* Border */
-  ${({ border = false, theme }) =>
-    border &&
-    css`
-      border: 1px solid ${theme.colors.border};
-    `}
-
-  /* Hoverable effect */
-  ${({ hoverable = false }) =>
-    hoverable &&
-    css`
-      &:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1),
-                    0 10px 10px -5px rgba(0, 0, 0, 0.04);
-      }
-    `}
-
-  /* Clickable cursor */
-  ${({ clickable = false, onClick }) =>
-    (clickable || onClick) &&
-    css`
-      cursor: pointer;
-      
-      &:hover {
-        box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.12),
-                    0 4px 8px -2px rgba(0, 0, 0, 0.08);
-      }
-      
-      &:active {
-        transform: translateY(1px);
-      }
-    `}
-`;
-
 const Card: React.FC<CardProps> = ({
   children,
-  className,
+  className = '',
+  padding = 'md',
+  shadow = 'sm',
+  border = false,
+  hoverable = false,
+  clickable = false,
   onClick,
   ...props
 }) => {
+  // Base classes
+  const baseClasses = 'card';
+
+  // Padding classes
+  const paddingClasses = {
+    none: '',
+    sm: 'p-4',
+    md: 'p-6',
+    lg: 'p-8',
+  };
+
+  // Shadow classes
+  const shadowClasses = {
+    none: 'shadow-none',
+    sm: 'shadow-sm',
+    md: 'shadow-medium',
+    lg: 'shadow-large',
+  };
+
+  // Interactive classes
+  const borderClass = border ? 'border' : '';
+  const hoverableClass = hoverable ? 'hover:-translate-y-1 hover:shadow-medium transition-all duration-200' : '';
+  const clickableClass = (clickable || onClick) ? 'cursor-pointer hover:shadow-medium active:transform active:translate-y-0.5 transition-all duration-150' : '';
+
+  // Combine all classes
+  const cardClasses = [
+    baseClasses,
+    paddingClasses[padding],
+    shadowClasses[shadow],
+    borderClass,
+    hoverableClass,
+    clickableClass,
+    className,
+  ].filter(Boolean).join(' ');
+
   return (
-    <StyledCard
+    <div
       {...props}
-      className={className}
+      className={cardClasses}
       onClick={onClick}
-      clickable={Boolean(onClick)}
     >
       {children}
-    </StyledCard>
+    </div>
   );
 };
 

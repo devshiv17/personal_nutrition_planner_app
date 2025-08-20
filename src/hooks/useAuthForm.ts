@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { LoginCredentials, RegisterData, PasswordResetRequest, PasswordResetConfirm } from '../types';
 import { useAuth } from './useAuth';
 import { authService } from '../services/authService';
@@ -24,6 +24,7 @@ interface UseAuthFormReturn<T> {
 export const useLoginForm = (initialData?: Partial<LoginCredentials>) => {
   const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [lockoutWarning, setLockoutWarning] = useState<string>('');
 
   const defaultData: LoginCredentials = {
     email: '',
@@ -34,6 +35,22 @@ export const useLoginForm = (initialData?: Partial<LoginCredentials>) => {
 
   const [data, setData] = useState<LoginCredentials>(defaultData);
   const [errors, setErrors] = useState<ValidationErrors>({});
+
+  // Check lockout status when email changes
+  useEffect(() => {
+    if (data.email) {
+      const lockoutStatus = authService.checkLockoutStatus(data.email);
+      if (lockoutStatus.isLocked) {
+        setLockoutWarning(lockoutStatus.message || 'Account temporarily locked');
+      } else if (lockoutStatus.message) {
+        setLockoutWarning(lockoutStatus.message);
+      } else {
+        setLockoutWarning('');
+      }
+    } else {
+      setLockoutWarning('');
+    }
+  }, [data.email]);
 
   const validateLogin = useCallback((loginData: LoginCredentials): ValidationErrors => {
     const validationErrors: ValidationErrors = {};
@@ -70,14 +87,30 @@ export const useLoginForm = (initialData?: Partial<LoginCredentials>) => {
   }, [data, validateLogin]);
 
   const submitLogin = useCallback(async () => {
+    // Check lockout status before validation
+    const lockoutStatus = authService.checkLockoutStatus(data.email);
+    if (lockoutStatus.isLocked) {
+      setErrors({ submit: lockoutStatus.message || 'Account temporarily locked' });
+      return false;
+    }
+
     if (!validate()) return false;
 
     setIsLoading(true);
     try {
       await login(data);
+      setLockoutWarning(''); // Clear any warnings on successful login
       return true;
     } catch (error) {
-      setErrors({ submit: error instanceof Error ? error.message : 'Login failed' });
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      setErrors({ submit: errorMessage });
+      
+      // Update lockout warning after failed attempt
+      const updatedStatus = authService.checkLockoutStatus(data.email);
+      if (updatedStatus.message) {
+        setLockoutWarning(updatedStatus.message);
+      }
+      
       return false;
     } finally {
       setIsLoading(false);
@@ -87,6 +120,7 @@ export const useLoginForm = (initialData?: Partial<LoginCredentials>) => {
   const reset = useCallback(() => {
     setData(defaultData);
     setErrors({});
+    setLockoutWarning('');
   }, []);
 
   const clearErrors = useCallback(() => setErrors({}), []);
@@ -98,6 +132,7 @@ export const useLoginForm = (initialData?: Partial<LoginCredentials>) => {
     data,
     errors,
     isLoading,
+    lockoutWarning,
     updateField,
     setData,
     setErrors,

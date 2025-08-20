@@ -183,6 +183,9 @@ export const AUTH_CONFIG = {
   LOCKOUT_DURATION: 15 * 60 * 1000, // 15 minutes
   SESSION_TIMEOUT: 30 * 60 * 1000, // 30 minutes of inactivity
   REMEMBER_ME_DURATION: 30 * 24 * 60 * 60 * 1000, // 30 days
+  LOCKOUT_CLEANUP_INTERVAL: 60 * 60 * 1000, // 1 hour cleanup interval
+  PROGRESSIVE_DELAY_BASE: 1000, // Base delay for progressive delays
+  PROGRESSIVE_DELAY_MAX: 30000, // Max delay of 30 seconds
 } as const;
 
 // Chart Colors

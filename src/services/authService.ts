@@ -13,6 +13,7 @@ import {
 } from '../types';
 import { API_BASE_URL, STORAGE_KEYS } from '../constants';
 import { tokenManager } from '../utils/tokenManager';
+import { lockoutManager } from '../utils/lockoutManager';
 
 interface ApiErrorResponse {
   message?: string;
@@ -102,6 +103,18 @@ authApi.interceptors.response.use(
 
 class AuthService {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
+    // Check lockout status before attempting login
+    const lockoutStatus = lockoutManager.checkLockoutStatus(credentials.email);
+    
+    if (lockoutStatus.isLocked) {
+      throw new Error(lockoutStatus.message || 'Account temporarily locked');
+    }
+
+    // Apply progressive delay if needed
+    if (lockoutStatus.nextAttemptDelay && lockoutStatus.nextAttemptDelay > 0) {
+      await new Promise(resolve => setTimeout(resolve, lockoutStatus.nextAttemptDelay));
+    }
+
     try {
       const response: AxiosResponse<any> = await authApi.post(
         '/login', 
@@ -114,7 +127,11 @@ class AuthService {
       if (response.data.success !== undefined) {
         // New API structure with success field
         if (!response.data.success) {
-          throw new Error(response.data.error || 'Login failed');
+          // Record failed attempt
+          const status = lockoutManager.recordLoginAttempt(credentials.email, false);
+          const errorMsg = response.data.error || 'Login failed';
+          const finalMsg = status.message ? `${errorMsg}. ${status.message}` : errorMsg;
+          throw new Error(finalMsg);
         }
         authData = response.data.data;
       } else {
@@ -124,6 +141,8 @@ class AuthService {
 
       // Ensure we have all required fields
       if (!authData.user || !authData.token) {
+        // Record failed attempt
+        lockoutManager.recordLoginAttempt(credentials.email, false);
         throw new Error('Invalid response from server');
       }
 
@@ -138,6 +157,9 @@ class AuthService {
         expiresIn: authData.expiresIn || 3600, // Default to 1 hour
         sessionId: authData.sessionId || Math.random().toString(36),
       };
+
+      // Record successful attempt (clears lockout)
+      lockoutManager.recordLoginAttempt(credentials.email, true);
       
       // Store tokens and user data
       tokenManager.setTokens(
@@ -151,6 +173,14 @@ class AuthService {
 
       return processedAuthData;
     } catch (error) {
+      // If it's not already handled above, record failed attempt
+      if (!error.message.includes('attempt')) {
+        const status = lockoutManager.recordLoginAttempt(credentials.email, false);
+        const originalMsg = getErrorMessage(error);
+        const finalMsg = status.message ? `${originalMsg}. ${status.message}` : originalMsg;
+        throw new Error(finalMsg);
+      }
+      
       throw new Error(getErrorMessage(error));
     }
   }
@@ -417,6 +447,23 @@ class AuthService {
 
   getUserData(): User | null {
     return tokenManager.getUserData();
+  }
+
+  // Lockout management methods
+  checkLockoutStatus(email: string) {
+    return lockoutManager.checkLockoutStatus(email);
+  }
+
+  clearLockout(email: string): void {
+    lockoutManager.clearLockout(email);
+  }
+
+  getLockoutAnalytics() {
+    return lockoutManager.getAnalytics();
+  }
+
+  checkSuspiciousActivity(email: string) {
+    return lockoutManager.checkSuspiciousActivity(email);
   }
 }
 

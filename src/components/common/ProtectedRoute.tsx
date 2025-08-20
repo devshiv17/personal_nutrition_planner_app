@@ -8,6 +8,9 @@ interface ProtectedRouteProps {
   requiresAuth?: boolean;
   redirectTo?: string;
   roles?: string[];
+  permissions?: string[];
+  requiresEmailVerification?: boolean;
+  requiresOnboarding?: boolean;
 }
 
 interface LoadingSpinnerProps {
@@ -22,8 +25,11 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ size = 'md' }) => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className={`animate-spin rounded-full border-4 border-gray-200 border-t-blue-600 ${sizeClasses[size]}`}></div>
+    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="flex flex-col items-center space-y-4">
+        <div className={`spinner ${sizeClasses[size]}`} />
+        <p className="text-sm text-gray-600">Loading...</p>
+      </div>
     </div>
   );
 };
@@ -69,10 +75,10 @@ const SessionWarningModal: React.FC<SessionWarningModalProps> = ({
   const seconds = Math.floor((countdown % 60000) / 1000);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <div className="text-center">
-          <div className="text-yellow-600 mb-4">
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <div className="card-body text-center">
+          <div className="text-warning-600 mb-4">
             <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
@@ -83,7 +89,7 @@ const SessionWarningModal: React.FC<SessionWarningModalProps> = ({
           </h3>
           
           <p className="text-gray-600 mb-4">
-            Your session will expire in <span className="font-mono font-bold text-red-600">
+            Your session will expire in <span className="font-mono font-bold text-error-600">
               {minutes}:{seconds.toString().padStart(2, '0')}
             </span>
           </p>
@@ -95,13 +101,13 @@ const SessionWarningModal: React.FC<SessionWarningModalProps> = ({
           <div className="flex space-x-3">
             <button
               onClick={onExtend}
-              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+              className="btn btn-primary flex-1"
             >
               Extend Session
             </button>
             <button
               onClick={onLogout}
-              className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors"
+              className="btn btn-outline flex-1"
             >
               Log Out
             </button>
@@ -116,7 +122,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children, 
   requiresAuth = true,
   redirectTo = ROUTES.LOGIN,
-  roles = []
+  roles = [],
+  permissions = [],
+  requiresEmailVerification = false,
+  requiresOnboarding = false
 }) => {
   const { isAuthenticated, loading, user, logout } = useAuth();
   const { sessionWarning, extendSession, dismissWarning, sessionInfo } = useSession();
@@ -153,19 +162,42 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
+  // Check if session is valid
+  if (!sessionInfo.isValid) {
+    return <Navigate to={redirectTo} state={{ from: location }} replace />;
+  }
+
+  // Check email verification requirement
+  if (requiresEmailVerification && user && !user.emailVerified) {
+    return <Navigate to="/verify-email" state={{ from: location }} replace />;
+  }
+
+  // Check onboarding requirement
+  if (requiresOnboarding && user) {
+    const onboardingCompleted = localStorage.getItem('onboarding_completed') === 'true';
+    if (!onboardingCompleted && location.pathname !== ROUTES.ONBOARDING) {
+      return <Navigate to={ROUTES.ONBOARDING} state={{ from: location }} replace />;
+    }
+  }
+
   // Check user roles if specified
   if (roles.length > 0 && user) {
     const userRoles = (user as any).roles || [];
     const hasRequiredRole = roles.some(role => userRoles.includes(role));
     
     if (!hasRequiredRole) {
-      return <Navigate to="/unauthorized" state={{ from: location }} replace />;
+      return <Navigate to="/unauthorized" state={{ from: location, requiredRoles: roles }} replace />;
     }
   }
 
-  // Check if session is valid
-  if (!sessionInfo.isValid) {
-    return <Navigate to={redirectTo} state={{ from: location }} replace />;
+  // Check permissions if specified
+  if (permissions.length > 0 && user) {
+    const userPermissions = (user as any).permissions || [];
+    const hasRequiredPermission = permissions.some(permission => userPermissions.includes(permission));
+    
+    if (!hasRequiredPermission) {
+      return <Navigate to="/forbidden" state={{ from: location, requiredPermissions: permissions }} replace />;
+    }
   }
 
   return (

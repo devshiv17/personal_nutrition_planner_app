@@ -1,5 +1,4 @@
 import React, { forwardRef } from 'react';
-import styled, { css } from 'styled-components';
 import { BaseComponentProps } from '../../../types';
 
 export interface InputProps extends BaseComponentProps {
@@ -33,112 +32,6 @@ export interface InputProps extends BaseComponentProps {
   minLength?: number;
 }
 
-const InputContainer = styled.div<{ fullWidth?: boolean }>`
-  display: flex;
-  flex-direction: column;
-  gap: ${({ theme }) => theme.spacing.xs};
-  
-  ${({ fullWidth }) =>
-    fullWidth &&
-    css`
-      width: 100%;
-    `}
-`;
-
-const Label = styled.label`
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.primary};
-  
-  &[data-required="true"]::after {
-    content: ' *';
-    color: ${({ theme }) => theme.colors.error};
-  }
-`;
-
-const InputWrapper = styled.div<{ hasError?: boolean; disabled?: boolean }>`
-  position: relative;
-  display: flex;
-  align-items: center;
-
-  ${({ hasError, theme }) =>
-    hasError &&
-    css`
-      .input-field {
-        border-color: ${theme.colors.error};
-        
-        &:focus {
-          border-color: ${theme.colors.error};
-          box-shadow: 0 0 0 3px ${theme.colors.error}20;
-        }
-      }
-    `}
-
-  ${({ disabled }) =>
-    disabled &&
-    css`
-      opacity: 0.6;
-      cursor: not-allowed;
-    `}
-`;
-
-const StyledInput = styled.input`
-  width: 100%;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: 0.5rem;
-  background-color: ${({ theme }) => theme.colors.surface};
-  color: ${({ theme }) => theme.colors.text.primary};
-  transition: all 0.2s ease-in-out;
-  font-family: inherit;
-  
-  &::placeholder {
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
-  
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.primary};
-    box-shadow: 0 0 0 3px ${({ theme }) => theme.colors.primary}20;
-  }
-  
-  &:disabled {
-    background-color: ${({ theme }) => theme.colors.background};
-    cursor: not-allowed;
-  }
-
-  &:read-only {
-    background-color: ${({ theme }) => theme.colors.background};
-  }`;
-
-const IconContainer = styled.div<{ position: 'left' | 'right' }>`
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  pointer-events: none;
-  
-  ${({ position }) =>
-    position === 'left'
-      ? css`
-          left: 0.75rem;
-        `
-      : css`
-          right: 0.75rem;
-        `}
-`;
-
-const HelperText = styled.span<{ isError?: boolean }>`
-  font-size: 0.75rem;
-  color: ${({ isError, theme }) =>
-    isError ? theme.colors.error : theme.colors.text.secondary};
-  min-height: 1rem;
-`;
-
 const Input = forwardRef<HTMLInputElement, InputProps>(
   (
     {
@@ -150,7 +43,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       rightIcon,
       required = false,
       disabled = false,
-      className,
+      className = '',
       id,
       size = 'md',
       ...props
@@ -160,46 +53,75 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
     const hasError = Boolean(error);
 
+    // Size classes
+    const sizeClasses = {
+      sm: 'px-3 py-1.5 text-sm',
+      md: 'px-3 py-2 text-sm',
+      lg: 'px-4 py-3 text-base',
+    };
+
+    // Input base classes
+    const inputBaseClasses = 'form-input';
+    const inputErrorClasses = hasError ? 'form-input-error' : '';
+    const inputWidthClasses = fullWidth ? 'w-full' : '';
+    const inputIconClasses = leftIcon ? 'pl-10' : rightIcon ? 'pr-10' : '';
+
+    // Container classes
+    const containerClasses = [
+      'flex flex-col space-y-1',
+      fullWidth ? 'w-full' : '',
+      disabled ? 'opacity-60 cursor-not-allowed' : '',
+      className,
+    ].filter(Boolean).join(' ');
+
+    // Combine input classes
+    const inputClasses = [
+      inputBaseClasses,
+      sizeClasses[size],
+      inputErrorClasses,
+      inputWidthClasses,
+      inputIconClasses,
+    ].filter(Boolean).join(' ');
+
     return (
-      <InputContainer fullWidth={fullWidth} className={className}>
+      <div className={containerClasses}>
         {label && (
-          <Label htmlFor={inputId} data-required={required}>
+          <label htmlFor={inputId} className="form-label">
             {label}
-          </Label>
+            {required && <span className="text-error-500 ml-1">*</span>}
+          </label>
         )}
         
-        <InputWrapper hasError={hasError} disabled={disabled}>
+        <div className="relative">
           {leftIcon && (
-            <IconContainer position="left">{leftIcon}</IconContainer>
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <div className="w-5 h-5 text-gray-400">
+                {leftIcon}
+              </div>
+            </div>
           )}
           
-          <StyledInput
+          <input
             {...props}
             ref={ref}
             id={inputId}
             required={required}
             disabled={disabled}
-            className={`input-field size-${size} ${leftIcon ? 'has-left-icon' : ''} ${rightIcon ? 'has-right-icon' : ''}`}
-            style={{
-              padding: size === 'sm' ? '0.25rem 0.5rem' : size === 'lg' ? '1rem 1.5rem' : '0.5rem 1rem',
-              fontSize: size === 'sm' ? '0.875rem' : size === 'lg' ? '1.125rem' : '1rem',
-              minHeight: size === 'sm' ? '2rem' : size === 'lg' ? '3rem' : '2.5rem',
-              paddingLeft: leftIcon ? '2.5rem' : undefined,
-              paddingRight: rightIcon ? '2.5rem' : undefined
-            }}
+            className={inputClasses}
           />
           
           {rightIcon && (
-            <IconContainer position="right">{rightIcon}</IconContainer>
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+              <div className="w-5 h-5 text-gray-400">
+                {rightIcon}
+              </div>
+            </div>
           )}
-        </InputWrapper>
+        </div>
         
-        {(error || helperText) && (
-          <HelperText isError={hasError}>
-            {error || helperText}
-          </HelperText>
-        )}
-      </InputContainer>
+        {error && <div className="form-error">{error}</div>}
+        {!error && helperText && <div className="form-help">{helperText}</div>}
+      </div>
     );
   }
 );
