@@ -59,8 +59,6 @@ function App() {
                         <Routes>
                           {/* Public routes */}
                           <Route path={ROUTES.HOME} element={<HomePage />} />
-                          <Route path={ROUTES.LOGIN} element={<LoginPage />} />
-                          <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
                           <Route path={ROUTES.ABOUT} element={<div>About Page</div>} />
                           <Route path={ROUTES.FEATURES} element={<div>Features Page</div>} />
                           <Route path={ROUTES.PRICING} element={<div>Pricing Page</div>} />
@@ -68,6 +66,25 @@ function App() {
                           <Route path={ROUTES.TERMS} element={<div>Terms Page</div>} />
                           <Route path={ROUTES.CONTACT} element={<div>Contact Page</div>} />
                           <Route path={ROUTES.HELP} element={<HelpPage />} />
+                          
+                          {/* Guest-only routes (redirect to dashboard if already authenticated) */}
+                          <Route path={ROUTES.LOGIN} element={
+                            <ProtectedRoute requiresAuth={false} guestOnly>
+                              <LoginPage />
+                            </ProtectedRoute>
+                          } />
+                          <Route path={ROUTES.REGISTER} element={
+                            <ProtectedRoute requiresAuth={false} guestOnly>
+                              <RegisterPage />
+                            </ProtectedRoute>
+                          } />
+                          
+                          {/* Special routes */}
+                          <Route path="/verify-email" element={<div>Email Verification Page</div>} />
+                          <Route path="/reset-password" element={<div>Password Reset Page</div>} />
+                          <Route path="/unauthorized" element={<div>Unauthorized Access</div>} />
+                          <Route path="/forbidden" element={<div>Forbidden Access</div>} />
+                          <Route path="/upgrade" element={<div>Premium Upgrade Required</div>} />
 
                           {/* Protected routes with layout */}
                           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
