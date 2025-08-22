@@ -2,7 +2,7 @@ import React, { forwardRef } from 'react';
 import { BaseComponentProps } from '../../../types';
 
 export interface InputProps extends BaseComponentProps {
-  type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'search';
+  type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'search' | 'date';
   placeholder?: string;
   value?: string | number;
   defaultValue?: string | number;
@@ -24,9 +24,9 @@ export interface InputProps extends BaseComponentProps {
   id?: string;
   autoComplete?: string;
   autoFocus?: boolean;
-  min?: number;
-  max?: number;
-  step?: number;
+  min?: number | string;
+  max?: number | string;
+  step?: number | string;
   pattern?: string;
   maxLength?: number;
   minLength?: number;
