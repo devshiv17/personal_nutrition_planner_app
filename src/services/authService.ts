@@ -118,7 +118,11 @@ class AuthService {
     try {
       const response: AxiosResponse<any> = await authApi.post(
         '/login', 
-        credentials
+        {
+          email: credentials.email,
+          password: credentials.password,
+          remember_me: credentials.rememberMe || false
+        }
       );
       
       // Handle different response structures
@@ -188,58 +192,58 @@ class AuthService {
 
   async register(data: RegisterData): Promise<AuthResponse> {
     try {
+      // Convert to form data since Laravel isn't parsing JSON properly
+      const formData = new URLSearchParams();
+      formData.append('first_name', data.firstName);
+      formData.append('last_name', data.lastName);
+      formData.append('email', data.email);
+      formData.append('password', data.password);
+      formData.append('password_confirmation', data.confirmPassword);
+
       const response: AxiosResponse<any> = await authApi.post(
         '/register', 
+        formData,
         {
-          first_name: data.firstName,
-          last_name: data.lastName,
-          email: data.email,
-          password: data.password,
-          password_confirmation: data.confirmPassword,
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
         }
       );
       
-      // Handle different response structures
-      let authData: AuthResponse;
-      
-      if (response.data.success !== undefined) {
-        if (!response.data.success) {
-          throw new Error(response.data.error || 'Registration failed');
-        }
-        authData = response.data.data;
-      } else {
-        authData = response.data;
+      // Handle different response structures - registration doesn't return auth tokens
+      if (response.data.success !== undefined && !response.data.success) {
+        throw new Error(response.data.error || 'Registration failed');
       }
 
-      // Ensure we have all required fields
-      if (!authData.user || !authData.token) {
-        throw new Error('Invalid response from server');
-      }
-
-      // Add default values if missing
+      // Registration was successful - return a mock auth response since registration doesn't auto-login
       const processedAuthData: AuthResponse = {
         user: {
-          ...authData.user,
-          name: authData.user.name || `${authData.user.firstName || ''} ${authData.user.lastName || ''}`.trim(),
+          ...response.data.user,
+          name: response.data.user.name || `${response.data.user.first_name || ''} ${response.data.user.last_name || ''}`.trim(),
+          firstName: response.data.user.first_name,
+          lastName: response.data.user.last_name,
         },
-        token: authData.token,
-        refreshToken: authData.refreshToken || '',
-        expiresIn: authData.expiresIn || 3600,
-        sessionId: authData.sessionId || Math.random().toString(36),
+        token: '', // No token for registration
+        refreshToken: '',
+        expiresIn: 0,
+        sessionId: '',
       };
-      
-      // Store tokens and user data
-      tokenManager.setTokens(
-        processedAuthData.token, 
-        processedAuthData.refreshToken, 
-        processedAuthData.expiresIn
-      );
-      
-      tokenManager.setUserData(processedAuthData.user);
-      tokenManager.setSessionId(processedAuthData.sessionId);
 
+      // Don't store tokens for registration - user needs to login separately
       return processedAuthData;
     } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 422) {
+        // Handle validation errors from Laravel
+        const errorData = error.response.data as ApiErrorResponse;
+        if (errorData.errors) {
+          // Convert Laravel validation errors to a readable format
+          const validationErrors = Object.entries(errorData.errors)
+            .map(([field, messages]: [string, any]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+            .join('\n');
+          throw new Error(validationErrors);
+        }
+        throw new Error(errorData.message || 'Validation failed');
+      }
       throw new Error(getErrorMessage(error));
     }
   }
@@ -383,13 +387,29 @@ class AuthService {
 
   async getActiveSessions(): Promise<UserSession[]> {
     try {
-      const response: AxiosResponse<ApiResponse<UserSession[]>> = await authApi.get('/sessions');
+      const response: AxiosResponse<any> = await authApi.get('/active-sessions');
       
-      if (!response.data.success) {
-        throw new Error(response.data.error || 'Failed to get sessions');
+      // Handle Laravel response structure
+      let sessionsData;
+      if (response.data.sessions) {
+        sessionsData = response.data.sessions;
+      } else if (response.data.success !== undefined && response.data.data) {
+        sessionsData = response.data.data;
+      } else {
+        sessionsData = response.data;
       }
 
-      return response.data.data;
+      // Transform backend session data to frontend format
+      const sessions = Array.isArray(sessionsData) ? sessionsData : [];
+      return sessions.map((session: any) => ({
+        id: session.id?.toString(),
+        deviceInfo: session.name || 'Unknown Device',
+        ipAddress: session.ip_address || 'Unknown',
+        location: session.location,
+        lastActivity: session.last_used_at || session.created_at,
+        isCurrentSession: session.is_current || false,
+        isMobile: session.name?.includes('mobile') || false
+      }));
     } catch (error) {
       throw new Error(getErrorMessage(error));
     }
@@ -399,7 +419,7 @@ class AuthService {
     try {
       const response: AxiosResponse<ApiResponse<null>> = await authApi.post(
         '/sessions/revoke',
-        { session_id: sessionId }
+        { token_id: sessionId }
       );
 
       if (!response.data.success) {

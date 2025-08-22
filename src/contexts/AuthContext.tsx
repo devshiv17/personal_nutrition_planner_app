@@ -4,6 +4,7 @@ import { STORAGE_KEYS } from '../constants';
 import { authService } from '../services/authService';
 import { tokenManager } from '../utils/tokenManager';
 import { sessionManager } from '../utils/sessionManager';
+import { authMiddleware } from '../utils/authMiddleware';
 
 interface AuthContextType extends AuthState {
   login: (credentials: LoginCredentials) => Promise<void>;
@@ -11,6 +12,7 @@ interface AuthContextType extends AuthState {
   logout: () => Promise<void>;
   logoutAll: () => Promise<void>;
   updateUser: (user: Partial<User>) => void;
+  updateUserProfile: (user: Partial<User>) => Promise<void>;
   refreshAccessToken: () => Promise<void>;
   requestPasswordReset: (data: PasswordResetRequest) => Promise<void>;
   resetPassword: (data: PasswordResetConfirm) => Promise<void>;
@@ -133,6 +135,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        // Initialize auth middleware
+        authMiddleware.setupRequestInterceptor();
+        
         // Check if tokens are valid
         if (tokenManager.isValid()) {
           const user = tokenManager.getUserData();
@@ -141,19 +146,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const sessionId = tokenManager.getSessionId();
           
           if (user && token && refreshToken && sessionId) {
-            dispatch({
-              type: 'AUTH_SUCCESS',
-              payload: {
-                user,
-                token,
-                refreshToken,
-                tokenExpiry: Date.now() + tokenManager.getTimeToExpiry(),
-                sessionId,
-              },
-            });
+            // Validate session with backend
+            const isValidSession = await authMiddleware.validateSession();
+            
+            if (isValidSession) {
+              dispatch({
+                type: 'AUTH_SUCCESS',
+                payload: {
+                  user,
+                  token,
+                  refreshToken,
+                  tokenExpiry: Date.now() + tokenManager.getTimeToExpiry(),
+                  sessionId,
+                },
+              });
 
-            // Initialize session manager
-            sessionManager.initialize();
+              // Initialize session manager
+              sessionManager.initialize();
+              
+              // Sync token expiration with backend
+              await authMiddleware.syncTokenExpiration();
+              
+              // Handle remember me persistence
+              authMiddleware.handleRememberMePersistence();
+            } else {
+              // Clear invalid tokens
+              tokenManager.clearTokens();
+            }
           } else {
             // Clear invalid tokens
             tokenManager.clearTokens();
@@ -166,10 +185,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     initializeAuth();
+    
+    // Setup cross-tab synchronization
+    const cleanupCrossTab = authMiddleware.setupCrossTabSync();
+    
+    // Setup periodic session validation
+    const cleanupValidation = authMiddleware.setupPeriodicValidation();
+    
+    // Listen for logout events
+    const handleLogout = (event: CustomEvent) => {
+      console.log('Logout triggered:', event.detail.reason);
+      dispatch({ type: 'LOGOUT' });
+    };
+    
+    window.addEventListener('auth:logout', handleLogout as EventListener);
 
-    // Cleanup session manager on unmount
+    // Cleanup on unmount
     return () => {
       sessionManager.destroy();
+      cleanupCrossTab();
+      cleanupValidation();
+      window.removeEventListener('auth:logout', handleLogout as EventListener);
     };
   }, []);
 
@@ -251,24 +287,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const register = useCallback(async (data: RegisterData) => {
-    dispatch({ type: 'AUTH_START' });
+    dispatch({ type: 'SET_LOADING', payload: true });
     
     try {
-      const authData = await authService.register(data);
-
-      dispatch({
-        type: 'AUTH_SUCCESS',
-        payload: {
-          user: authData.user,
-          token: authData.token,
-          refreshToken: authData.refreshToken,
-          tokenExpiry: Date.now() + (authData.expiresIn * 1000),
-          sessionId: authData.sessionId,
-        },
-      });
-
-      // Initialize session management
-      sessionManager.initialize();
+      await authService.register(data);
+      
+      // Registration successful - clear loading and don't set auth state
+      // User needs to login separately after email verification
+      dispatch({ type: 'SET_LOADING', payload: false });
 
     } catch (error) {
       dispatch({
@@ -406,6 +432,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [state.user]);
 
+  const updateUserProfile = useCallback(async (updates: Partial<User>) => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    try {
+      // Here you would typically call an API to update the user profile
+      // For now, just update the local state
+      dispatch({ type: 'UPDATE_USER', payload: updates });
+      
+      // Update stored user data
+      if (state.user) {
+        const updatedUser = { ...state.user, ...updates };
+        tokenManager.setUserData(updatedUser);
+      }
+    } catch (error) {
+      dispatch({
+        type: 'AUTH_FAILURE',
+        payload: error instanceof Error ? error.message : 'Profile update failed',
+      });
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, [state.user]);
+
   const clearError = useCallback(() => {
     dispatch({ type: 'CLEAR_ERROR' });
   }, []);
@@ -417,6 +466,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     logoutAll,
     updateUser,
+    updateUserProfile,
     refreshAccessToken,
     requestPasswordReset,
     resetPassword,
