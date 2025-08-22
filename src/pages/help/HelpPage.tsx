@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import Card from '../../components/ui/Card';
+import { Card } from '../../components/ui/Card';
 
 const Container = styled.div`
   max-width: 1200px;

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import styled, { keyframes, css } from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { Link } from 'react-router-dom';
-import Button from '../../components/ui/Button';
-import Card from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
 import { ROUTES } from '../../constants';
 
 // Animation keyframes
@@ -69,14 +69,6 @@ const gradientShift = keyframes`
   }
 `;
 
-const rotate = keyframes`
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-`;
 
 // Styled components
 const Container = styled.div`
@@ -729,18 +721,18 @@ const HomePage: React.FC = () => {
           
           <FooterSection>
             <h3>Features</h3>
-            <p><a href="#">AI Meal Planning</a></p>
-            <p><a href="#">Voice Logging</a></p>
-            <p><a href="#">Progress Tracking</a></p>
-            <p><a href="#">Smart Analytics</a></p>
+            <p><Link to={ROUTES.FEATURES}>AI Meal Planning</Link></p>
+            <p><Link to={ROUTES.FEATURES}>Voice Logging</Link></p>
+            <p><Link to={ROUTES.FEATURES}>Progress Tracking</Link></p>
+            <p><Link to={ROUTES.FEATURES}>Smart Analytics</Link></p>
           </FooterSection>
           
           <FooterSection>
             <h3>Support</h3>
             <p><a href={ROUTES.HELP}>Help Center</a></p>
             <p><a href={ROUTES.CONTACT}>Contact Us</a></p>
-            <p><a href="#">API Documentation</a></p>
-            <p><a href="#">Community</a></p>
+            <p><Link to={ROUTES.HELP}>API Documentation</Link></p>
+            <p><Link to={ROUTES.HELP}>Community</Link></p>
           </FooterSection>
           
           <FooterSection>
@@ -748,7 +740,7 @@ const HomePage: React.FC = () => {
             <p><a href={ROUTES.ABOUT}>About Us</a></p>
             <p><a href={ROUTES.PRIVACY}>Privacy Policy</a></p>
             <p><a href={ROUTES.TERMS}>Terms of Service</a></p>
-            <p><a href="#">Careers</a></p>
+            <p><Link to={ROUTES.ABOUT}>Careers</Link></p>
           </FooterSection>
         </FooterContent>
         
