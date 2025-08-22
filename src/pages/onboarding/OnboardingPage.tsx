@@ -1,7 +1,7 @@
 import React from 'react';
 import styled from 'styled-components';
-import Card from '../../components/ui/Card';
-import Button from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../constants';
 

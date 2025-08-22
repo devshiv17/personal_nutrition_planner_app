@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth, useSession } from '../../hooks';
 import { ROUTES } from '../../constants';
+import { lockoutManager } from '../../utils/lockoutManager';
+import { tokenManager } from '../../utils/tokenManager';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -11,6 +13,9 @@ interface ProtectedRouteProps {
   permissions?: string[];
   requiresEmailVerification?: boolean;
   requiresOnboarding?: boolean;
+  requiresPremium?: boolean;
+  adminOnly?: boolean;
+  guestOnly?: boolean;
 }
 
 interface LoadingSpinnerProps {
@@ -118,6 +123,57 @@ const SessionWarningModal: React.FC<SessionWarningModalProps> = ({
   );
 };
 
+interface AccountLockoutModalProps {
+  isOpen: boolean;
+  lockoutInfo: any;
+  onClose: () => void;
+}
+
+const AccountLockoutModal: React.FC<AccountLockoutModalProps> = ({
+  isOpen,
+  lockoutInfo,
+  onClose,
+}) => {
+  if (!isOpen) return null;
+
+  const minutes = Math.ceil((lockoutInfo.lockoutExpiresAt - Date.now()) / 60000);
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <div className="card-body text-center">
+          <div className="text-error-600 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+            </svg>
+          </div>
+          
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            Account Temporarily Locked
+          </h3>
+          
+          <p className="text-gray-600 mb-4">
+            Your account has been temporarily locked due to multiple failed login attempts.
+          </p>
+          
+          <p className="text-sm text-gray-500 mb-6">
+            Please try again in <span className="font-bold text-error-600">{minutes} minute{minutes !== 1 ? 's' : ''}</span>.
+          </p>
+          
+          <div className="flex space-x-3">
+            <button
+              onClick={onClose}
+              className="btn btn-outline flex-1"
+            >
+              Go to Login
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   children, 
   requiresAuth = true,
@@ -125,11 +181,27 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   roles = [],
   permissions = [],
   requiresEmailVerification = false,
-  requiresOnboarding = false
+  requiresOnboarding = false,
+  requiresPremium = false,
+  adminOnly = false,
+  guestOnly = false
 }) => {
   const { isAuthenticated, loading, user, logout } = useAuth();
   const { sessionWarning, extendSession, dismissWarning, sessionInfo } = useSession();
   const location = useLocation();
+  const [lockoutModalOpen, setLockoutModalOpen] = useState(false);
+  const [lockoutInfo, setLockoutInfo] = useState<any>(null);
+
+  // Security checks and lockout monitoring
+  useEffect(() => {
+    if (user?.email) {
+      const lockoutStatus = lockoutManager.checkLockoutStatus(user.email);
+      if (lockoutStatus.isLocked) {
+        setLockoutInfo(lockoutStatus);
+        setLockoutModalOpen(true);
+      }
+    }
+  }, [user?.email]);
 
   // Handle session warning modal
   const handleExtendSession = async () => {
@@ -147,9 +219,20 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     await logout();
   };
 
+  const handleLockoutClose = () => {
+    setLockoutModalOpen(false);
+    logout();
+  };
+
   // Show loading spinner while authentication state is being determined
   if (loading) {
     return <LoadingSpinner />;
+  }
+
+  // Guest-only routes (login, register) - redirect if already authenticated
+  if (guestOnly && isAuthenticated) {
+    const from = (location.state as any)?.from?.pathname;
+    return <Navigate to={from || ROUTES.DASHBOARD} replace />;
   }
 
   // If authentication is not required, render children
@@ -167,9 +250,30 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
+  // Check if token is valid and not compromised
+  if (!tokenManager.isValid()) {
+    return <Navigate to={redirectTo} state={{ from: location, reason: 'invalid_token' }} replace />;
+  }
+
+  // Admin-only routes
+  if (adminOnly && user) {
+    const userRoles = (user as any).roles || [];
+    if (!userRoles.includes('admin') && !userRoles.includes('super_admin')) {
+      return <Navigate to="/unauthorized" state={{ from: location, reason: 'admin_required' }} replace />;
+    }
+  }
+
   // Check email verification requirement
   if (requiresEmailVerification && user && !user.emailVerified) {
     return <Navigate to="/verify-email" state={{ from: location }} replace />;
+  }
+
+  // Check premium requirement
+  if (requiresPremium && user) {
+    const isPremium = (user as any).isPremium || (user as any).subscription?.active;
+    if (!isPremium) {
+      return <Navigate to="/upgrade" state={{ from: location, reason: 'premium_required' }} replace />;
+    }
   }
 
   // Check onboarding requirement
@@ -210,6 +314,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         timeRemaining={sessionInfo.timeToExpiry}
         onExtend={handleExtendSession}
         onLogout={handleLogout}
+      />
+      
+      {/* Account Lockout Modal */}
+      <AccountLockoutModal
+        isOpen={lockoutModalOpen}
+        lockoutInfo={lockoutInfo}
+        onClose={handleLockoutClose}
       />
     </>
   );

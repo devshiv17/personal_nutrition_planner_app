@@ -1,7 +1,7 @@
 import React from 'react';
 import styled from 'styled-components';
-import Card from '../../components/ui/Card';
-import Button from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
 
 const Container = styled.div`
   max-width: 1200px;
